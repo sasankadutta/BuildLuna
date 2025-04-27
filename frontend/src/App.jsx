@@ -1,68 +1,68 @@
-// frontend/src/App.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+
+import Home from "./pages/Home";
+import Design from "./pages/Design";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import Pricing from "./pages/Pricing";
+import Navbar from "./components/navbar";
+import { ThemeProvider } from "./context/ThemeContext";
 
 function App() {
-  const [prompt, setPrompt] = useState("");
-  const [result, setResult] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Function to generate design from the backend
-  const generateDesign = async () => {
-    if (!prompt.trim()) {
-      alert("Please enter a design prompt.");
-      return;
-    }
+  // Check localStorage for login status on page load
+  useEffect(() => {
+    const loggedInStatus = localStorage.getItem("buildlunaLoggedIn") === "true";
+    setIsLoggedIn(loggedInStatus);
+  }, []);
 
-    try {
-      const response = await fetch("http://localhost:5000/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to generate design. Please try again.");
-      }
-
-      const data = await response.json();
-      setResult(data.result); // Save the result from the backend
-    } catch (error) {
-      console.error("Error generating design:", error);
-      alert(error.message);
-    }
+  // Set login status based on the localStorage value after signup or login
+  const updateLoginStatus = () => {
+    const loggedInStatus = localStorage.getItem("buildlunaLoggedIn") === "true";
+    setIsLoggedIn(loggedInStatus);
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col justify-center items-center p-4">
-      <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full">
-        <h1 className="text-3xl font-bold text-center text-blue-600 mb-4">
-          HomeGPT Design Generator
-        </h1>
-        <input
-          type="text"
-          placeholder="Enter design prompt"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          className="w-full p-3 border border-gray-300 rounded-lg mb-4"
-        />
-        <button
-          onClick={generateDesign}
-          className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700"
-        >
-          Generate Design
-        </button>
-        {result && (
-          <div className="mt-6">
-            <h2 className="text-xl font-semibold text-gray-700">
-              Generated Result:
-            </h2>
-            <p className="text-gray-600">{result}</p>
-          </div>
-        )}
-      </div>
-    </div>
+    <ThemeProvider>
+      <Router>
+        <Navbar isLoggedIn={isLoggedIn} /> {/* Pass login state to Navbar */}
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route
+            path="/design"
+            element={
+              <ProtectedRoute isLoggedIn={isLoggedIn}>
+                <Design />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/login"
+            element={<Login updateLoginStatus={updateLoginStatus} />}
+          />
+          <Route
+            path="/signup"
+            element={<Signup updateLoginStatus={updateLoginStatus} />}
+          />
+          <Route path="/pricing" element={<Pricing />} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
+}
+
+function ProtectedRoute({ children, isLoggedIn }) {
+  if (!isLoggedIn) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
 }
 
 export default App;

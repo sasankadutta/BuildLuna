@@ -1,7 +1,9 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { OpenAI } from "openai"; // Use the correct OpenAI import
+import { GoogleGenerativeAI } from "@google/generative-ai"; // Import Gemini
+import authRoutes from "./src/routes/authRoutes.js"; // Update path as needed
+import connectDB from "./src/config/db.js"; // MongoDB connection
 
 dotenv.config();
 
@@ -9,28 +11,59 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Initialize OpenAI API client with the API key
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Your OpenAI API key
-});
+// Initialize Gemini with the API key
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// Define the /generate route to handle design requests
+// Define the /generate route to handle image generation requests
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
-  try {
-    // Correct function to create a chat completion using the model
-    const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // Replace 'gpt-4' with 'gpt-3.5-turbo' if you don't have access to GPT-4
-      messages: [{ role: "user", content: prompt }],
-    });
 
-    // Send the result to the frontend
-    res.json({ result: response.choices[0].message.content });
+  // Check if prompt is provided and valid
+  if (!prompt || prompt.trim() === "") {
+    return res
+      .status(400)
+      .json({ message: "Prompt is required for image generation." });
+  }
+
+  try {
+    // Create the Gemini generative model
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+
+    // Generate content using the model and the user's prompt
+    const result = await model.generateContent(prompt);
+
+    // Process the response to get the generated design/content
+    const response = await result.response; // Assuming the response has the content we need
+    const text = await response.text(); // This is for text generation. For images, the approach will differ.
+
+    // Assuming the response contains the generated image URL or content
+    const imageUrl = text; // If it's an image, we expect an image URL as a response
+    if (imageUrl) {
+      return res.json({ imageUrl }); // Send the generated image URL back to the frontend
+    } else {
+      return res
+        .status(500)
+        .json({ message: "Failed to generate design from Gemini." });
+    }
   } catch (error) {
-    console.error("Error from OpenAI:", error);
-    res.status(500).send("Something went wrong");
+    console.error("Error generating image with Gemini:", error);
+    return res
+      .status(500)
+      .json({ message: "Error generating image from backend." });
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// Connect to MongoDB
+connectDB()
+  .then(() => {
+    // Mount the auth routes after DB connection
+    app.use("/api/auth", authRoutes);
+
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error("MongoDB connection error:", error.message);
+  });
